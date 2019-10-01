@@ -2,7 +2,7 @@
 layout: post
 title: Nginx in Docker as non root user
 date: 2019-10-01 08:00:00 +0200
-description: Ho to buid and run nginx as non root user
+description: How to buid and run nginx as non root user
 img: docker+nginx.jpg
 tags: [docker, nginx, non-root]
 ---
