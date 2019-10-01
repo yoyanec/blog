@@ -1,0 +1,239 @@
+I"-\<p>By default docker containers run as root. I don`t like that.</p>
+
+<h2 id="what-you-need-to-know">What you need to know</h2>
+
+<p>These are the things you need to keep in mind if you want to run nginx as non root user:</p>
+
+<ul>
+  <li>non-root-user needs read access to web app files</li>
+  <li>non-root-user needs read/write access to <code class="highlighter-rouge">/var/run/nginx.pid</code></li>
+  <li>non-root-user needs read/write access to <code class="highlighter-rouge">/var/cache/nginx</code></li>
+  <li>only root can listen on ports below 1024, so you will need to use higher-numbered ports (not 80 and 443). This is not an issue since you can map your host port to your container port</li>
+</ul>
+
+<h2 id="prepare-user-on-docker-host-system">Prepare user on docker host system</h2>
+
+<p>First, you need to create user and group on docker host:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="c">#create Group_Name with gid Group_ID</span>
+<span class="nb">sudo </span>groupadd <span class="nt">-g</span> Group_ID Group_Name
+
+<span class="c">#create User_name with gid User_ID </span>
+<span class="nb">sudo </span>adduser <span class="nt">-u</span> User_ID User_name 
+
+<span class="c">#add User_name to Group_Name</span>
+<span class="nb">sudo </span>usermod <span class="nt">-a</span> <span class="nt">-G</span> Group_Name User_name</code></pre></figure>
+
+<p>So in our case:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nb">sudo </span>groupadd <span class="nt">-g</span> 1443 non-root-user-group
+<span class="nb">sudo </span>adduser <span class="nt">-u</span> 1443 non-root-user
+<span class="nb">sudo </span>usermod <span class="nt">-a</span> <span class="nt">-G</span> non-root-user-group non-root-user</code></pre></figure>
+
+<h2 id="prepare-config-files-on-docker-host-system">Prepare config files on docker host system</h2>
+
+<p>You need at least <code class="highlighter-rouge">nginx.conf</code> and <code class="highlighter-rouge">default.conf</code> to run nginx. You may want to start with the config files provided in the offical image. An easy way to copy the original files from the image to your host is to start a container and use docker cp:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">docker run <span class="nt">--name</span> nginx <span class="nt">-d</span> nginx:stable
+docker <span class="nb">cp </span>nginx:/etc/nginx/ /dockervolumes/nginx-unprivileged/
+docker stop nginx
+docker <span class="nb">rm </span>nginx</code></pre></figure>
+
+<p>From file <code class="highlighter-rouge">nginx.conf</code> remove line</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">user nginx<span class="p">;</span></code></pre></figure>
+
+<p>And change ports in <code class="highlighter-rouge">default.conf</code> (and in all vhost.conf files) from 80 to 8080 and from 443 to 8443. For exmaple <code class="highlighter-rouge">default.conf</code> may look like this:</p>
+
+<figure class="highlight"><pre><code class="language-nginx" data-lang="nginx"><span class="k">server</span> <span class="p">{</span>
+    <span class="kn">listen</span> <span class="mi">8080</span><span class="p">;</span>
+    <span class="kn">server_name</span> <span class="s">localhost</span><span class="p">;</span>
+    <span class="kn">location</span> <span class="n">/</span> <span class="p">{</span>
+        <span class="kn">root</span> <span class="n">/var/www</span><span class="p">;</span>
+        <span class="kn">index</span> <span class="s">index.html</span> <span class="s">index.htm</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></figure>
+
+<h2 id="dockerfile">Dockerfile</h2>
+
+<p>Here is an example of <code class="highlighter-rouge">Dockerfile</code> from official nginx image with modified user and rights.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">ARG <span class="nv">IMAGE</span><span class="o">=</span>alpine:3.10
+FROM <span class="se">\$</span>IMAGE
+
+LABEL <span class="nv">maintainer</span><span class="o">=</span><span class="s2">"NGINX Docker Maintainers &lt;docker-maint@nginx.com&gt;"</span>
+
+ENV NGINX_VERSION 1.17.3
+ENV NJS_VERSION 0.3.5
+ENV PKG_RELEASE 1
+
+RUN <span class="nb">set</span> <span class="nt">-x</span> <span class="se">\</span>
+
+<span class="c"># create nginx user/group first, to be consistent throughout docker variants</span>
+
+    <span class="o">&amp;&amp;</span> addgroup <span class="nt">-g</span> 1433 <span class="nt">-S</span> nginx <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> adduser <span class="nt">-S</span> <span class="nt">-D</span> <span class="nt">-H</span> <span class="nt">-u</span> 1443 <span class="nt">-h</span> /var/cache/nginx <span class="nt">-s</span> /sbin/nologin <span class="nt">-G</span> nginx <span class="nt">-g</span> nginx nginx <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="nv">apkArch</span><span class="o">=</span><span class="s2">"</span><span class="si">$(</span><span class="nb">cat</span> /etc/apk/arch<span class="si">)</span><span class="s2">"</span> <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="nv">nginxPackages</span><span class="o">=</span><span class="s2">" </span><span class="se">\</span><span class="s2">
+        nginx=</span><span class="k">${</span><span class="nv">NGINX_VERSION</span><span class="k">}</span><span class="s2">-r</span><span class="k">${</span><span class="nv">PKG_RELEASE</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+        nginx-module-xslt=</span><span class="k">${</span><span class="nv">NGINX_VERSION</span><span class="k">}</span><span class="s2">-r</span><span class="k">${</span><span class="nv">PKG_RELEASE</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+        nginx-module-geoip=</span><span class="k">${</span><span class="nv">NGINX_VERSION</span><span class="k">}</span><span class="s2">-r</span><span class="k">${</span><span class="nv">PKG_RELEASE</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+        nginx-module-image-filter=</span><span class="k">${</span><span class="nv">NGINX_VERSION</span><span class="k">}</span><span class="s2">-r</span><span class="k">${</span><span class="nv">PKG_RELEASE</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+        nginx-module-njs=</span><span class="k">${</span><span class="nv">NGINX_VERSION</span><span class="k">}</span><span class="s2">.</span><span class="k">${</span><span class="nv">NJS_VERSION</span><span class="k">}</span><span class="s2">-r</span><span class="k">${</span><span class="nv">PKG_RELEASE</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+    "</span> <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="k">case</span> <span class="s2">"</span><span class="nv">$apkArch</span><span class="s2">"</span> <span class="k">in</span> <span class="se">\</span>
+        x86_64<span class="p">)</span> <span class="se">\</span>
+
+<span class="c"># arches officially built by upstream</span>
+
+            <span class="nb">set</span> <span class="nt">-x</span> <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> <span class="nv">KEY_SHA512</span><span class="o">=</span><span class="s2">"e7fa8303923d9b95db37a77ad46c68fd4755ff935d0a534d26eba83de193c76166c68bfe7f65471bf8881004ef4aa6df3e34689c305662750c0172fca5d8552a *stdin"</span> <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> apk add <span class="nt">--no-cache</span> <span class="nt">--virtual</span> .cert-deps <span class="se">\</span>
+                openssl <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> wget <span class="nt">-O</span> /tmp/nginx_signing.rsa.pub https://nginx.org/keys/nginx_signing.rsa.pub <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="si">$(</span>openssl rsa <span class="nt">-pubin</span> <span class="nt">-in</span> /tmp/nginx_signing.rsa.pub <span class="nt">-text</span> <span class="nt">-noout</span> | openssl sha512 <span class="nt">-r</span><span class="si">)</span><span class="s2">"</span> <span class="o">=</span> <span class="s2">"</span><span class="nv">$KEY_SHA512</span><span class="s2">"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span> <span class="se">\</span>
+                <span class="nb">echo</span> <span class="s2">"key verification succeeded!"</span><span class="p">;</span> <span class="se">\</span>
+                <span class="nb">mv</span> /tmp/nginx_signing.rsa.pub /etc/apk/keys/<span class="p">;</span> <span class="se">\</span>
+            <span class="k">else</span> <span class="se">\</span>
+                <span class="nb">echo</span> <span class="s2">"key verification failed!"</span><span class="p">;</span> <span class="se">\</span>
+                <span class="nb">exit </span>1<span class="p">;</span> <span class="se">\</span>
+            <span class="k">fi</span> <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> <span class="nb">printf</span> <span class="s2">"%s%s%s</span><span class="se">\n</span><span class="s2">"</span> <span class="se">\</span>
+                <span class="s2">"https://nginx.org/packages/mainline/alpine/v"</span> <span class="se">\</span>
+                <span class="sb">`</span>egrep <span class="nt">-o</span> <span class="s1">'^[0-9]+\.[0-9]+'</span> /etc/alpine-release<span class="sb">`</span> <span class="se">\</span>
+                <span class="s2">"/main"</span> <span class="se">\</span>
+            | <span class="nb">tee</span> <span class="nt">-a</span> /etc/apk/repositories <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> apk del .cert-deps <span class="se">\</span>
+            <span class="p">;;</span> <span class="se">\</span>
+        <span class="k">*</span><span class="p">)</span> <span class="se">\</span>
+
+<span class="c"># we're on an architecture upstream doesn't officially build for</span>
+
+<span class="c"># let's build binaries from the published packaging sources</span>
+
+            <span class="nb">set</span> <span class="nt">-x</span> <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> <span class="nv">tempDir</span><span class="o">=</span><span class="s2">"</span><span class="si">$(</span><span class="nb">mktemp</span> <span class="nt">-d</span><span class="si">)</span><span class="s2">"</span> <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> <span class="nb">chown </span>nobody:nobody <span class="nv">$tempDir</span> <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> apk add <span class="nt">--no-cache</span> <span class="nt">--virtual</span> .build-deps <span class="se">\</span>
+                gcc <span class="se">\</span>
+                libc-dev <span class="se">\</span>
+                make <span class="se">\</span>
+                openssl-dev <span class="se">\</span>
+                pcre-dev <span class="se">\</span>
+                zlib-dev <span class="se">\</span>
+                linux-headers <span class="se">\</span>
+                libxslt-dev <span class="se">\</span>
+                gd-dev <span class="se">\</span>
+                geoip-dev <span class="se">\</span>
+                perl-dev <span class="se">\</span>
+                libedit-dev <span class="se">\</span>
+                mercurial <span class="se">\</span>
+                bash <span class="se">\</span>
+                alpine-sdk <span class="se">\</span>
+                findutils <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> su nobody <span class="nt">-s</span> /bin/sh <span class="nt">-c</span> <span class="s2">" </span><span class="se">\</span><span class="s2">
+                export HOME=</span><span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+                &amp;&amp; cd </span><span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+                &amp;&amp; hg clone https://hg.nginx.org/pkg-oss </span><span class="se">\</span><span class="s2">
+                &amp;&amp; cd pkg-oss </span><span class="se">\</span><span class="s2">
+                &amp;&amp; hg up </span><span class="k">${</span><span class="nv">NGINX_VERSION</span><span class="k">}</span><span class="s2">-</span><span class="k">${</span><span class="nv">PKG_RELEASE</span><span class="k">}</span><span class="s2"> </span><span class="se">\</span><span class="s2">
+                &amp;&amp; cd alpine </span><span class="se">\</span><span class="s2">
+                &amp;&amp; make all </span><span class="se">\</span><span class="s2">
+                &amp;&amp; apk index -o </span><span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span><span class="s2">/packages/alpine/</span><span class="k">${</span><span class="nv">apkArch</span><span class="k">}</span><span class="s2">/APKINDEX.tar.gz </span><span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span><span class="s2">/packages/alpine/</span><span class="k">${</span><span class="nv">apkArch</span><span class="k">}</span><span class="s2">/*.apk </span><span class="se">\</span><span class="s2">
+                &amp;&amp; abuild-sign -k </span><span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span><span class="s2">/.abuild/abuild-key.rsa </span><span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span><span class="s2">/packages/alpine/</span><span class="k">${</span><span class="nv">apkArch</span><span class="k">}</span><span class="s2">/APKINDEX.tar.gz </span><span class="se">\</span><span class="s2">
+                "</span> <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> <span class="nb">echo</span> <span class="s2">"</span><span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span><span class="s2">/packages/alpine/"</span> <span class="o">&gt;&gt;</span> /etc/apk/repositories <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> <span class="nb">cp</span> <span class="k">${</span><span class="nv">tempDir</span><span class="k">}</span>/.abuild/abuild-key.rsa.pub /etc/apk/keys/ <span class="se">\</span>
+            <span class="o">&amp;&amp;</span> apk del .build-deps <span class="se">\</span>
+            <span class="p">;;</span> <span class="se">\</span>
+    <span class="k">esac</span> <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> apk add <span class="nt">--no-cache</span> <span class="nv">$nginxPackages</span> <span class="se">\</span>
+
+<span class="c"># if we have leftovers from building, let's purge them (including extra, unnecessary build deps)</span>
+
+    <span class="o">&amp;&amp;</span> <span class="k">if</span> <span class="o">[</span> <span class="nt">-n</span> <span class="s2">"</span><span class="nv">$tempDir</span><span class="s2">"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then </span><span class="nb">rm</span> <span class="nt">-rf</span> <span class="s2">"</span><span class="nv">$tempDir</span><span class="s2">"</span><span class="p">;</span> <span class="k">fi</span> <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="k">if</span> <span class="o">[</span> <span class="nt">-n</span> <span class="s2">"/etc/apk/keys/abuild-key.rsa.pub"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then </span><span class="nb">rm</span> <span class="nt">-f</span> /etc/apk/keys/abuild-key.rsa.pub<span class="p">;</span> <span class="k">fi</span> <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="k">if</span> <span class="o">[</span> <span class="nt">-n</span> <span class="s2">"/etc/apk/keys/nginx_signing.rsa.pub"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then </span><span class="nb">rm</span> <span class="nt">-f</span> /etc/apk/keys/nginx_signing.rsa.pub<span class="p">;</span> <span class="k">fi</span> <span class="se">\</span>
+
+<span class="c"># remove the last line with the packages repos in the repositories file</span>
+
+    <span class="o">&amp;&amp;</span> <span class="nb">sed</span> <span class="nt">-i</span> <span class="s1">'$ d'</span> /etc/apk/repositories <span class="se">\</span>
+
+<span class="c"># Bring in gettext so we can get `envsubst`, then throw</span>
+
+<span class="c"># the rest away. To do this, we need to install `gettext`</span>
+
+<span class="c"># then move `envsubst` out of the way so `gettext` can</span>
+
+<span class="c"># be deleted completely, then move `envsubst` back.</span>
+
+    <span class="o">&amp;&amp;</span> apk add <span class="nt">--no-cache</span> <span class="nt">--virtual</span> .gettext gettext <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="nb">mv</span> /usr/bin/envsubst /tmp/ <span class="se">\</span>
+    <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="nv">runDeps</span><span class="o">=</span><span class="s2">"</span><span class="si">$(</span> <span class="se">\</span>
+        scanelf <span class="nt">--needed</span> <span class="nt">--nobanner</span> /tmp/envsubst <span class="se">\</span>
+            | <span class="nb">awk</span> <span class="s1">'{ gsub(/,/, "\nso:", $2); print "so:" $2 }'</span> <span class="se">\</span>
+            | <span class="nb">sort</span> <span class="nt">-u</span> <span class="se">\</span>
+            | xargs <span class="nt">-r</span> apk info <span class="nt">--installed</span> <span class="se">\</span>
+            | <span class="nb">sort</span> <span class="nt">-u</span> <span class="se">\</span>
+    <span class="si">)</span><span class="s2">"</span> <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> apk add <span class="nt">--no-cache</span> <span class="nv">$runDeps</span> <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> apk del .gettext <span class="se">\</span>
+    <span class="o">&amp;&amp;</span> <span class="nb">mv</span> /tmp/envsubst /usr/local/bin/ <span class="se">\</span>
+
+<span class="c"># Bring in tzdata so users could set the timezones through the environment</span>
+
+<span class="c"># variables</span>
+
+    <span class="o">&amp;&amp;</span> apk add <span class="nt">--no-cache</span> tzdata
+
+<span class="c"># implement changes required to run NGINX as an unprivileged user</span>
+
+RUN <span class="nb">sed</span> <span class="nt">-i</span> <span class="nt">-e</span> <span class="s1">'/listen/!b'</span> <span class="nt">-e</span> <span class="s1">'/80;/!b'</span> <span class="nt">-e</span> <span class="s1">'s/80;/8080;/'</span> /etc/nginx/conf.d/default.conf <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">sed</span> <span class="nt">-i</span> <span class="nt">-e</span> <span class="s1">'/user/!b'</span> <span class="nt">-e</span> <span class="s1">'/nginx/!b'</span> <span class="nt">-e</span> <span class="s1">'/nginx/d'</span> /etc/nginx/nginx.conf <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">sed</span> <span class="nt">-i</span> <span class="s1">'s!/var/run/nginx.pid!/tmp/nginx.pid!g'</span> /etc/nginx/nginx.conf <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">sed</span> <span class="nt">-i</span> <span class="s2">"/^http {/a </span><span class="se">\ </span><span class="s2">proxy_temp_path /tmp/proxy_temp;</span><span class="se">\n</span><span class="s2"> client_body_temp_path /tmp/client_temp;</span><span class="se">\n</span><span class="s2"> fastcgi_temp_path /tmp/fastcgi_temp;</span><span class="se">\n</span><span class="s2"> uwsgi_temp_path /tmp/uwsgi_temp;</span><span class="se">\n</span><span class="s2"> scgi_temp_path /tmp/scgi_temp;</span><span class="se">\n</span><span class="s2">"</span> /etc/nginx/nginx.conf
+
+RUN <span class="nb">chown</span> <span class="nt">-R</span> 1443:0 /var/cache/nginx <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">chmod</span> <span class="nt">-R</span> g+w /var/cache/nginx <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">touch</span> /var/run/nginx.pid <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">chown</span> <span class="nt">-R</span> 1443:0 /var/run/nginx.pid <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">ln</span> <span class="nt">-sf</span> /dev/stdout /var/log/nginx/access.log <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> <span class="nb">ln</span> <span class="nt">-sf</span> /dev/stderr /var/log/nginx/error.log
+
+EXPOSE 8080 8443
+
+STOPSIGNAL SIGTERM
+
+USER 1443
+
+CMD <span class="o">[</span><span class="s2">"nginx"</span>, <span class="s2">"-g"</span>, <span class="s2">"daemon off;"</span><span class="o">]</span></code></pre></figure>
+
+<h2 id="docker-composeyaml">docker-compose.yaml</h2>
+
+<figure class="highlight"><pre><code class="language-yaml" data-lang="yaml"><span class="na">version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">3.2"</span>
+
+<span class="na">services</span><span class="pi">:</span>
+  <span class="na">nginx-unprivileged</span><span class="pi">:</span>
+    <span class="na">build</span><span class="pi">:</span>
+      <span class="na">context</span><span class="pi">:</span> <span class="s">./nginx-unprivileged</span>
+      <span class="na">dockerfile</span><span class="pi">:</span> <span class="s">Dockerfile</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">yoyanec/nginx-unprivileged:1.17.3</span>
+    <span class="na">container_name</span><span class="pi">:</span> <span class="s">nginx-unprivileged</span>
+    <span class="na">volumes</span><span class="pi">:</span> 
+      <span class="pi">-</span> <span class="s">/dockervolumes/nginx-unprivileged/nginx:/etc/nginx:ro</span> 
+      <span class="pi">-</span> <span class="s">/dockervolumes/nginx-unprivileged/www:/var/www:ro</span>
+    <span class="na">ports</span><span class="pi">:</span> 
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">80:8080"</span> 
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">443:8443"</span>
+    <span class="na">networks</span><span class="pi">:</span> 
+      <span class="pi">-</span> <span class="s">nginx-unprivileged-network</span>
+    <span class="na">restart</span><span class="pi">:</span> <span class="s">unless-stopped</span>
+    <span class="na">environment</span><span class="pi">:</span> 
+      <span class="pi">-</span> <span class="s">TZ=Europe/Bratislava</span></code></pre></figure>
+
+<h2 id="how-to-start-unprivileged-nginx-service">How to start unprivileged nginx service</h2>
+<p>All you need to do is:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nb">sudo </span>docker-compose up <span class="nt">-d</span> nginx-unprivileged</code></pre></figure>
+:ET
