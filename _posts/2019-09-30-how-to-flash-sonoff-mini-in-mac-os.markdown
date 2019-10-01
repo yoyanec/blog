@@ -14,7 +14,7 @@ How to user REST API to flash Sonoff Mini with Tasmota.
 * physicaly open the device cover and connect DIY jumper
 * create Wifi with SSID `sonoffDiy` and password `20170618sn` (both are case sensitive!)
 * connect Sonoff Mini to this network
-* run HTTP server on sonoffDiy network (idealy nginx) - HTTP server must support the Range request header
+* run HTTP server on sonoffDiy network (ideally nginx) - HTTP server must support the Range request header
 
 ## Find the Sonoff Mini on network
 Look in administration of you WiFi router to find your Sonoff Mini IP Address `deviceIP` . Using utility `dns-sd` find Zeroconf detals, specifically `deviceID` - look for `Instance Name`.
