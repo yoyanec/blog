@@ -17,7 +17,7 @@ How to user REST API to flash Sonoff Mini with Tasmota.
 * run HTTP server on sonoffDiy network (ideally nginx) - HTTP server must support the Range request header
 
 ## Find the Sonoff Mini on network
-Look in administration of you WiFi router to find your Sonoff Mini IP Address `deviceIP` . Using utility `dns-sd` find Zeroconf detals, specifically `deviceID` - look for `Instance Name`.
+Find in administration of your WiFi router your Sonoff Mini IP Address `deviceIP` . Using utility `dns-sd` find Zeroconf detals, specifically `deviceID` - look for `Instance Name`.
 {% highlight Bash %}
 dns-sd -B _ewelink._tcp
 {% endhighlight %}
