@@ -51,4 +51,4 @@ After restart you should see new network interface in web interface:
 
 If you for some reason can't connect to Synology NAS after restart, just reset network and start over. Don't worry, your files and apps stay untouched.
 
-[https://www.synology.com/en-global/knowledgebase/DSM/tutorial/General_Setup/How_to_reset_my_Synology_NAS](https://www.synology.com/en-global/knowledgebase/DSM/tutorial/General_Setup/How_to_reset_my_Synology_NAS)
+[How to reset Synology NAS](https://www.synology.com/en-global/knowledgebase/DSM/tutorial/General_Setup/How_to_reset_my_Synology_NAS)
