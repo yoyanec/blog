@@ -12,7 +12,7 @@ author-img: author.jpg
 about-author: I just need a place to store things, i do not want to forget.
 
 # Tracker
-analytics: # Google Analytics
+analytics: UA-46512356-1
 
 # Build Settings
 markdown: kramdown
