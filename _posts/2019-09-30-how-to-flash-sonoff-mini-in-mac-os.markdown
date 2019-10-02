@@ -36,7 +36,7 @@ And count SHA256 `<SHA256>` of firmware binary file `sonoff.bin`:
 shasum -a 256 sonoff-basic.bin
 {% endhighlight %}
 
-It will look like `c01b39c7a35ccc3b081a3e83d2c71fa9a767ebfeb45c69f08e17dfe3ef375a7b`.
+It will look like `c01b39c7a35ccc3b081a...`.
 
 ## Update firmware using OTA
 
