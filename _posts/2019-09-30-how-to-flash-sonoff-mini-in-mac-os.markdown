@@ -28,12 +28,12 @@ It will look like `eWeLink_100000140e`. 100000140e is your `deviceID`.
 
 On HTTP server download Tasmota to root folder of HTTP server:
 {% highlight Bash %}
-sudo wget http://thehackbox.org/tasmota/release/sonoff.bin -P /var/www/html
+sudo wget http://thehackbox.org/tasmota/release/tasmota-lite.bin -P /var/www/html
 {% endhighlight %}
 
-And count SHA256 `<SHA256>` of firmware binary file `sonoff.bin`:
+And count SHA256 `<SHA256>` of firmware binary file `tasmota-lite.bin`:
 {% highlight Bash %}
-shasum -a 256 sonoff-basic.bin
+shasum -a 256 tasmota-lite.bin
 {% endhighlight %}
 
 It will look like `c01b39c7a35ccc3b081a...`.
@@ -84,7 +84,7 @@ curl http://<deviceIP>:8081/zeroconf/ota_unlock -XPOST --data '{"deviceid":"<dev
 
 * Update firmware using OTA:
 {% highlight Bash %}
-curl http://<deviceIP>:8081/zeroconf/ota_flash -XPOST --data '{"deviceid":"<deviceID>","data":{"downloadUrl": "http://<HTTPserverIP>/sonoff.bin", "sha256sum": "<SHA256>"} }'
+curl http://<deviceIP>:8081/zeroconf/ota_flash -XPOST --data '{"deviceid":"<deviceID>","data":{"downloadUrl": "http://<HTTPserverIP>/tasmota-lite.bin", "sha256sum": "<SHA256>"} }'
 {% endhighlight %}
 
 And wait abou 30 seconds.
