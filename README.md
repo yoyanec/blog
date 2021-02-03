@@ -1,1 +1,1 @@
-Blog theme based on https://github.com/artemsheludko/flexible-jekyll
+Blog based on theme https://github.com/artemsheludko/flexible-jekyll
