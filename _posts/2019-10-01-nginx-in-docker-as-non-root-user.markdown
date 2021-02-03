@@ -11,12 +11,12 @@ By default docker containers run as root. I don`t like that.
 
 ## What you need to know
 
-These are the things you need to keep in mind if you want to run nginx as non root user:
+If you want to run nginx as non root user, you have to meet these requirements:
 
 - non-root-user needs read access to web app files
-- non-root-user needs read/write access to `/var/run/nginx.pid`
+- non-root-user needs read/write access to `/var/run/nginx.pid` or any other pid file of nginx (pid file can be changed is nginx.conf)
 - non-root-user needs read/write access to `/var/cache/nginx`
-- only root can listen on ports below 1024, so you will need to use higher-numbered ports (not 80 and 443). This is not an issue since you can map your host port to your container port
+- free port(s) to above 1024. Only root can listen on ports below 1024, so you will need to use higher-numbered ports (not HTTP/80 and HTTPS/443). This is not an issue since you can map your host port to your container port
 
 ## Prepare user on docker host system
 
@@ -40,7 +40,7 @@ sudo usermod -a -G non-root-user-group non-root-user
 
 ## Prepare config files on docker host system
 
-You need at least `nginx.conf` and `default.conf` to run nginx. You may want to start with the config files provided in the offical image. An easy way to copy the original files from the image to your host is to start a container and use docker cp:
+Nginx needs at least `nginx.conf` and `default.conf` to be able to start. IMHO best way is to start with the config files provided in the offical docker image. An easy way to copy the original files from the image to your host is to start a container and use docker cp:
 
 {% highlight Bash %}
 docker run --name nginx -d nginx:stable
@@ -54,7 +54,7 @@ From file `nginx.conf` remove line
 user nginx;
 {% endhighlight %}
 
-And change ports in `default.conf` (and in all vhost.conf files) from 80 to 8080 and from 443 to 8443. For exmaple `default.conf` may look like this:
+And change ports in `default.conf` (and in all vhost.conf files) from 80 to your choice of free port above 1024, for example 8080 and from 443 to 8443. So your `default.conf` may look like this:
 
 {% highlight Nginx %}
 server {
@@ -85,7 +85,7 @@ RUN set -x \
 
 # create nginx user/group first, to be consistent throughout docker variants
 
-    && addgroup -g 1433 -S nginx \
+    && addgroup -g 1443 -S nginx \
     && adduser -S -D -H -u 1443 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx \
     && apkArch="$(cat /etc/apk/arch)" \
     && nginxPackages=" \
@@ -250,7 +250,7 @@ services:
 {% endhighlight %}
 
 ## How to start unprivileged nginx service
-All you need to do is:
+That`s all. Only thing you need to do to start unprivileged nginx docker service is:
 
 {% highlight Bash %}
 sudo docker-compose up -d nginx-unprivileged
