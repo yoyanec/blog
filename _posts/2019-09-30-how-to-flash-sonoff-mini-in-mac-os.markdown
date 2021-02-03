@@ -7,7 +7,7 @@ img: sonoff-mini-flash.jpg
 tags: [sonoff, sonoff mini, tasmota, MacOS]
 ---
 
-How to user REST API to flash Sonoff Mini with Tasmota.
+How to use REST API to flash Sonoff Mini with Tasmota.
 
 ## Requirements
 * chceck if eWelink firmware in Sonoff Mini is updated to at least version 3.1. If not, connect Sonoff Mini to Wifi using eWelink app and then update firmware using same app
